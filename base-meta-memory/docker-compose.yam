@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  app:
+    image: chatbot-meta:1.0 //=> aca viene el nombre de imagen al crearla
+    restart: on-failure //=> siempre que tu bot falle se reiniciara
+    ports:
+      - 3000:3000 //el primer 3000 representa el puerto del VPS y el segundo el puerto de tu contenedor
+    environment: //=> importante que los nombres de tus variables de entorno esten igual que en tu codigo
+      - JWT_TOKEN=${JWT_TOKEN}
+      - NUMBER_ID=${NUMBER_ID}
+      - VERIFY_TOKEN=${VERIFY_TOKEN}
