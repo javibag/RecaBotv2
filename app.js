@@ -13,20 +13,50 @@ const { EVENTS } = bot;
 const { addKeyword } = bot;
 
 const flowRecibirMedia = addKeyword(EVENTS.MEDIA).addAnswer(
-  "He recibido tu foto o video",
+  "A ver...",
   null,
-  async (ctx) => {
+  async (ctx, { flowDynamic }) => {
     const buffer = await downloadMediaMessage(ctx, "buffer");
     const numeroWhatsApp = ctx.from;
-    const horaActual = new Date().toISOString().replace(/[:.]/g, '');
-    const fileName = `${numeroWhatsApp}_${horaActual}.jpeg`;
+    const fechaHoraActual = new Date();
+    const optionsDate = { year: "numeric", month: "2-digit", day: "2-digit" };
+    const fechaActual = fechaHoraActual
+      .toLocaleDateString("es-ES", optionsDate)
+      .replace(/\//g, "-");
+    const optionsHour = {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    };
+    const horaActual = fechaHoraActual
+      .toLocaleTimeString("es-ES", optionsHour)
+      .replace(/[:.]/g, "");
+    const fileName = `${numeroWhatsApp}_${fechaActual}_${horaActual}.jpeg`;
     const filePath = `recibidos/${fileName}`;
-    if (!fs.existsSync('recibidos')) {
-      fs.mkdirSync('recibidos');
+    if (!fs.existsSync("recibidos")) {
+      fs.mkdirSync("recibidos");
     }
     fs.writeFileSync(filePath, buffer);
+    await flowDynamic([
+      {
+        body: "Me encanto!",
+        media: "https://i.ebayimg.com/images/g/kfAAAOSwnZxkSTL1/s-l1600.png",
+        delay: 1000,
+      },
+    ]);
   }
-);
+).addAction(async (ctx, {provider}) => {
+  const id = ctx.key.remoteJid;
+  console.log("🚀 ~ ).addAction ~ id:", id)
+  const sock = await provider.getInstance();
+  console.log("🚀 ~ ).addAction ~ sock:", sock)
+  await sock.sendPresenceUpdate("composing", id);
+  await sock.sendMessage(
+     id,
+    { audio: { url: "https://creativesounddesign.com/sound/mp3_14/Explosion_Large_KaBoom_Echo.mp3" }, mimetype: 'audio/mp4',ptt: true }
+   );
+
+});
 
 const flowPdfRecibido = addKeyword(EVENTS.DOCUMENT).addAnswer(
   "He recibido tu Comprobante"
