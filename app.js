@@ -4,9 +4,43 @@ import { getDay } from "date-fns";
 import QRPortalWeb from "@bot-whatsapp/portal";
 import BaileysProvider from "@bot-whatsapp/provider/baileys";
 import MockAdapter from "@bot-whatsapp/database/mock";
-
 import chatgpt from "./services/openai/chatgpt.js";
 import GoogleSheetService from "./services/sheets/index.js";
+import { downloadMediaMessage } from "@whiskeysockets/baileys";
+import fs from "fs";
+
+const { EVENTS } = bot;
+const { addKeyword } = bot;
+
+const flowRecibirMedia = addKeyword(EVENTS.MEDIA).addAnswer(
+  "He recibido tu foto o video",
+  null,
+  async (ctx) => {
+    const buffer = await downloadMediaMessage(ctx, "buffer");
+    const numeroWhatsApp = ctx.from;
+    const horaActual = new Date().toISOString().replace(/[:.]/g, '');
+    const fileName = `${numeroWhatsApp}_${horaActual}.jpeg`;
+    const filePath = `recibidos/${fileName}`;
+    if (!fs.existsSync('recibidos')) {
+      fs.mkdirSync('recibidos');
+    }
+    fs.writeFileSync(filePath, buffer);
+  }
+);
+
+const flowPdfRecibido = addKeyword(EVENTS.DOCUMENT).addAnswer(
+  "He recibido tu Comprobante"
+);
+
+const flowWelcome = addKeyword("Soy Anto").addAnswer(
+  "Sabes que te amo con toda mi alma",
+  null,
+  async (ctx) => {
+    console.log(ctx);
+    const numeroDeWhatsapp = ctx.from;
+    const mensajeRecibido = ctx.body;
+  }
+);
 
 const googelSheet = new GoogleSheetService(
   "1rDDWdRcLmecRhDSepMZdJwxMIp8iOxZMjDKuh2dA6W8"
@@ -61,7 +95,7 @@ const flowMenu = bot
       if (getCheck.includes("NO_EXISTE")) {
         return gotoFlow(flowEmpty);
       } else {
-        state.update({pedido:ctx.body})
+        state.update({ pedido: ctx.body });
         return gotoFlow(flowPedido);
       }
     }
@@ -93,7 +127,7 @@ const flowPedido = bot
     "Perfecto tu pedido estara listo en un aprox 20min",
     null,
     async (ctx, { state }) => {
-        const currentState = state.getMyState();
+      const currentState = state.getMyState();
       await googelSheet.saveOrder({
         fecha: new Date().toDateString(),
         telefono: ctx.from,
@@ -111,6 +145,9 @@ const main = async () => {
     flowMenu,
     flowPedido,
     flowEmpty,
+    flowWelcome,
+    flowRecibirMedia,
+    flowPdfRecibido,
   ]);
   const adapterProvider = bot.createProvider(BaileysProvider);
 
