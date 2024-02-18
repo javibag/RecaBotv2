@@ -13,7 +13,6 @@ import fs from "fs";
 const { EVENTS } = bot;
 const { addKeyword } = bot;
 
-
 const flowRecibirMedia = addKeyword(EVENTS.MEDIA)
   .addAnswer("A ver...", null, async (ctx, { flowDynamic }) => {
     const buffer = await downloadMediaMessage(ctx, "buffer");
@@ -55,7 +54,26 @@ const flowRecibirMedia = addKeyword(EVENTS.MEDIA)
       mimetype: "audio/mp4",
       ptt: true,
     });
-  });
+  })
+  .addAnswer(
+    "Si no es correcta la informacion, porfavor escribi Leto",
+    null,
+    async (ctx, { state }) => {
+      console.log(ctx);
+      const numeroDeWhatsapp = ctx.from;
+      const mensajeRecibido = ctx.body;
+    }
+  );
+
+const flowLeto = addKeyword("Leto").addAnswer(
+  "En breve te habla Leto",
+  null,
+  async (ctx) => {
+    console.log(ctx);
+    const numeroDeWhatsapp = ctx.from;
+    const mensajeRecibido = ctx.body;
+  }
+);
 
 const flowPdfRecibido = addKeyword(EVENTS.DOCUMENT).addAnswer(
   "Por ahora solo imagenes"
@@ -179,10 +197,7 @@ const main = async () => {
     flowPdfRecibido,
   ]);
 
-  const adapterFlow2 = bot.createFlow([
-    flowRecibirMedia,
-    flowPdfRecibido,
-  ]);
+  const adapterFlow2 = bot.createFlow([flowRecibirMedia, flowPdfRecibido, flowLeto]);
 
   const adapterProvider = bot.createProvider(BaileysProvider);
 
