@@ -7,16 +7,78 @@ import MockAdapter from "@bot-whatsapp/database/mock";
 //import chatgpt from "./services/openai/chatgpt.js";
 import imageReader from "./services/openai/gptimages.js";
 import GoogleSheetService from "./services/sheets/index.js";
+import GuardaSheets from "./services/sheets/GuardaSheets.js";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import fs from "fs";
 
 const { EVENTS } = bot;
 const { addKeyword } = bot;
+const requestQueue = [];
+const MAX_REQUESTS_PER_MINUTE = 10;
 
-const flowRecibirMedia = addKeyword(EVENTS.MEDIA)
-  .addAnswer("A ver...", null, async (ctx, { flowDynamic }) => {
-    const buffer = await downloadMediaMessage(ctx, "buffer");
+const googelSheetJav = new GuardaSheets(
+  "1qpVgEEZ16nEqIk3T5AlZyvfnhz9hCgdO_zBLDMb72vw"
+);
+
+const googelSheet = new GoogleSheetService(
+  "1qpVgEEZ16nEqIk3T5AlZyvfnhz9hCgdO_zBLDMb72vw"
+);
+
+async function processQueue() {
+  while (true) {
+    if (requestQueue.length > 0) {
+      const { filePath, flowDynamic, numeroWhatsApp } = requestQueue.shift();
+      try {
+        console.log(`Procesando imagen: ${filePath}`); 
+        const response = await imageReader(filePath);
+        console.log(`Respuesta recibida: ${JSON.stringify(response)}`); 
+        response.datosTransferencia.telefono = numeroWhatsApp;
+        googelSheetJav.saveSheet(response.datosTransferencia);
+        await flowDynamic([
+          {
+            body: response.respuestaApi,
+            delay: 1000,
+          },
+        ]);
+        if (requestQueue.length < 1) {
+        await flowDynamic([
+          {
+            body: "Se termino de procesar, si hay algun error porfavor escribi Leto",
+            delay: 1000,
+          },
+        ]);
+      }
+
+
+
+      } catch (error) {
+        console.error("Error procesando la solicitud:", error);
+        await flowDynamic([
+          {
+            body: "Lo siento, hubo un problema al procesar tu comprobante. Por favor, inténtalo de nuevo más tarde.",
+            delay: 1000,
+          },
+        ]);
+      }
+    } else {
+      console.log("La cola de procesamiento está vacía.");
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, 60000 / MAX_REQUESTS_PER_MINUTE)
+    );
+  }
+}
+
+
+processQueue();
+
+let imageCounter = 0
+
+const flowRecibirMedia = addKeyword(EVENTS.MEDIA).addAction(
+  async (ctx, { flowDynamic }) => {
     const numeroWhatsApp = ctx.from;
+    console.log(`Descargando imagen de ${numeroWhatsApp}`);
+    const buffer = await downloadMediaMessage(ctx, "buffer");
     const fechaHoraActual = new Date();
     const optionsDate = { year: "numeric", month: "2-digit", day: "2-digit" };
     const fechaActual = fechaHoraActual
@@ -30,40 +92,83 @@ const flowRecibirMedia = addKeyword(EVENTS.MEDIA)
     const horaActual = fechaHoraActual
       .toLocaleTimeString("es-ES", optionsHour)
       .replace(/[:.]/g, "");
-    const fileName = `${numeroWhatsApp}_${fechaActual}_${horaActual}.jpeg`;
+    const fileName = `${numeroWhatsApp}_${fechaActual}_${horaActual}_${imageCounter}.jpeg`; 
     const filePath = `recibidos/${fileName}`;
+    console.log(`Imagen descargada. Guardando en ${filePath}`);
     if (!fs.existsSync("recibidos")) {
       fs.mkdirSync("recibidos");
     }
     fs.writeFileSync(filePath, buffer);
-    const response = await imageReader(filePath);
-    await flowDynamic([
-      {
-        body: response.respuestaApi,
-        //   media: "https://i.ebayimg.com/images/g/kfAAAOSwnZxkSTL1/s-l1600.png",
-        delay: 1000,
-      },
-    ]);
-  })
-  .addAction(async (ctx, { provider }) => {
-    const id = ctx.key.remoteJid;
-    const sock = await provider.getInstance();
-    await sock.sendPresenceUpdate("composing", id);
-    await sock.sendMessage(id, {
-      audio: { url: "explosion2.mp3" },
-      mimetype: "audio/mp4",
-      ptt: true,
-    });
-  })
-  .addAnswer(
-    "Si no es correcta la informacion, porfavor escribi Leto",
-    null,
-    async (ctx, { state }) => {
-      console.log(ctx);
-      const numeroDeWhatsapp = ctx.from;
-      const mensajeRecibido = ctx.body;
-    }
-  );
+    console.log(`Imagen guardada en ${filePath}`);
+    requestQueue.push({ filePath, flowDynamic, numeroWhatsApp });
+    imageCounter++; 
+  }
+);
+
+// const flowRecibirMedia = addKeyword(EVENTS.MEDIA)
+//   .addAnswer("A ver...", null, async (ctx, { flowDynamic }) => {
+//     try {
+//       const buffer = await downloadMediaMessage(ctx, "buffer");
+//       const numeroWhatsApp = ctx.from;
+//       const fechaHoraActual = new Date();
+//       const optionsDate = { year: "numeric", month: "2-digit", day: "2-digit" };
+//       const fechaActual = fechaHoraActual
+//         .toLocaleDateString("es-ES", optionsDate)
+//         .replace(/\//g, "-");
+//       const optionsHour = {
+//         hour: "2-digit",
+//         minute: "2-digit",
+//         second: "2-digit",
+//       };
+//       const horaActual = fechaHoraActual
+//         .toLocaleTimeString("es-ES", optionsHour)
+//         .replace(/[:.]/g, "");
+//       const fileName = `${numeroWhatsApp}_${fechaActual}_${horaActual}.jpeg`;
+//       const filePath = `recibidos/${fileName}`;
+//       if (!fs.existsSync("recibidos")) {
+//         fs.mkdirSync("recibidos");
+//       }
+//       fs.writeFileSync(filePath, buffer);
+//       requestQueue.push({ filePath, flowDynamic, numeroWhatsApp });
+//       //      const response = await imageReader(filePath);
+//       response.datosTransferencia.telefono = numeroWhatsApp;
+//       googelSheetJav.saveSheet(response.datosTransferencia)
+//       await flowDynamic([
+//         {
+//           body: response.respuestaApi,
+//           //   media: "https://i.ebayimg.com/images/g/kfAAAOSwnZxkSTL1/s-l1600.png",
+//           delay: 1000,
+//         },
+//       ]);
+//     } catch (error) {
+//       console.error("Ocurrió un error:", error);
+//       await flowDynamic([
+//         {
+//           body: "Lo siento, hubo un problema al procesar tu solicitud. Por favor, inténtalo de nuevo más tarde.",
+//           delay: 1000,
+//         },
+//       ]);
+//     }
+//   })
+//   // .addAction(async (ctx, { provider }) => {
+//   //   const id = ctx.key.remoteJid;
+//   //   const sock = await provider.getInstance();
+//   //   await sock.sendPresenceUpdate("composing", id);
+//   //   await sock.sendMessage(id, {
+//   //     audio: { url: "explosion2.mp3" },
+//   //     mimetype: "audio/mp4",
+//   //     ptt: true,
+//   //   });
+//   // })
+//   // .addAnswer(
+//   //   "Si no es correcta la informacion, porfavor escribi Leto",
+//   //   null,
+//   //   async (ctx, { state }) => {
+//   //     console.log(ctx);
+//   //     const numeroDeWhatsapp = ctx.from;
+//   //     const mensajeRecibido = ctx.body;
+//   //   }
+//   // );
 
 const flowLeto = addKeyword("Leto").addAnswer(
   "En breve te habla Leto",
@@ -87,10 +192,6 @@ const flowWelcome = addKeyword("Soy Anto").addAnswer(
     const numeroDeWhatsapp = ctx.from;
     const mensajeRecibido = ctx.body;
   }
-);
-
-const googelSheet = new GoogleSheetService(
-  "1rDDWdRcLmecRhDSepMZdJwxMIp8iOxZMjDKuh2dA6W8"
 );
 
 const GLOBAL_STATE = [];
@@ -197,7 +298,11 @@ const main = async () => {
     flowPdfRecibido,
   ]);
 
-  const adapterFlow2 = bot.createFlow([flowRecibirMedia, flowPdfRecibido, flowLeto]);
+  const adapterFlow2 = bot.createFlow([
+    flowRecibirMedia,
+    flowPdfRecibido,
+    flowLeto,
+  ]);
 
   const adapterProvider = bot.createProvider(BaileysProvider);
 
