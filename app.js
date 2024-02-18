@@ -4,7 +4,8 @@ import { getDay } from "date-fns";
 import QRPortalWeb from "@bot-whatsapp/portal";
 import BaileysProvider from "@bot-whatsapp/provider/baileys";
 import MockAdapter from "@bot-whatsapp/database/mock";
-import chatgpt from "./services/openai/chatgpt.js";
+//import chatgpt from "./services/openai/chatgpt.js";
+import imageReader from "./services/openai/gptimages.js";
 import GoogleSheetService from "./services/sheets/index.js";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import fs from "fs";
@@ -12,10 +13,9 @@ import fs from "fs";
 const { EVENTS } = bot;
 const { addKeyword } = bot;
 
-const flowRecibirMedia = addKeyword(EVENTS.MEDIA).addAnswer(
-  "A ver...",
-  null,
-  async (ctx, { flowDynamic }) => {
+
+const flowRecibirMedia = addKeyword(EVENTS.MEDIA)
+  .addAnswer("A ver...", null, async (ctx, { flowDynamic }) => {
     const buffer = await downloadMediaMessage(ctx, "buffer");
     const numeroWhatsApp = ctx.from;
     const fechaHoraActual = new Date();
@@ -37,29 +37,28 @@ const flowRecibirMedia = addKeyword(EVENTS.MEDIA).addAnswer(
       fs.mkdirSync("recibidos");
     }
     fs.writeFileSync(filePath, buffer);
+    const response = await imageReader(filePath);
     await flowDynamic([
       {
-        body: "Me encanto!",
-        media: "https://i.ebayimg.com/images/g/kfAAAOSwnZxkSTL1/s-l1600.png",
+        body: response.respuestaApi,
+        //   media: "https://i.ebayimg.com/images/g/kfAAAOSwnZxkSTL1/s-l1600.png",
         delay: 1000,
       },
     ]);
-  }
-).addAction(async (ctx, {provider}) => {
-  const id = ctx.key.remoteJid;
-  console.log("🚀 ~ ).addAction ~ id:", id)
-  const sock = await provider.getInstance();
-  console.log("🚀 ~ ).addAction ~ sock:", sock)
-  await sock.sendPresenceUpdate("composing", id);
-  await sock.sendMessage(
-     id,
-    { audio: { url: "https://creativesounddesign.com/sound/mp3_14/Explosion_Large_KaBoom_Echo.mp3" }, mimetype: 'audio/mp4',ptt: true }
-   );
-
-});
+  })
+  .addAction(async (ctx, { provider }) => {
+    const id = ctx.key.remoteJid;
+    const sock = await provider.getInstance();
+    await sock.sendPresenceUpdate("composing", id);
+    await sock.sendMessage(id, {
+      audio: { url: "explosion2.mp3" },
+      mimetype: "audio/mp4",
+      ptt: true,
+    });
+  });
 
 const flowPdfRecibido = addKeyword(EVENTS.DOCUMENT).addAnswer(
-  "He recibido tu Comprobante"
+  "Por ahora solo imagenes"
 );
 
 const flowWelcome = addKeyword("Soy Anto").addAnswer(
@@ -179,10 +178,16 @@ const main = async () => {
     flowRecibirMedia,
     flowPdfRecibido,
   ]);
+
+  const adapterFlow2 = bot.createFlow([
+    flowRecibirMedia,
+    flowPdfRecibido,
+  ]);
+
   const adapterProvider = bot.createProvider(BaileysProvider);
 
   bot.createBot({
-    flow: adapterFlow,
+    flow: adapterFlow2,
     provider: adapterProvider,
     database: adapterDB,
   });
